@@ -2,10 +2,15 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-typedef enum {
+typedef enum
+{
     CONDITION,
+    CONDITION_INVERSE,
     PATH,
-    COMMAND
+    GO,
+    MAKE,
+    BLOCK,
+    EOL
 } TokenType;
 
 typedef struct Token
@@ -15,21 +20,125 @@ typedef struct Token
     char *value;
 } Token;
 
+typedef struct ParseTreeNode
+{
+    TokenType command;
+    char* path;
+    int isBlock;
+    struct ParseTreeNode* block;
+} ParseTreeNode;
 
 /**
 * Stack node for Lexical analyzer tokens
 */
-typedef struct LexerStackNode
+typedef struct LexerNode
 {
     Token *token;
-    Token *next;
-} LexerStackNode;
+} LexerNode;
+
+
+// Queue
+typedef struct Node
+{
+    void *data;
+    struct Node *next;
+} node;
+
+typedef struct QueueList
+{
+    int sizeOfQueue;
+    size_t memSize;
+    node *head;
+    node *tail;
+} Queue;
+
+void queueInit(Queue *q, size_t memSize)
+{
+    q->sizeOfQueue = 0;
+    q->memSize = memSize;
+    q->head = q->tail = NULL;
+}
+
+int enqueue(Queue *q, const void *data)
+{
+    node *newNode = (node *)malloc(sizeof(node));
+
+    if(newNode == NULL)
+    {
+        return -1;
+    }
+
+    newNode->data = malloc(q->memSize);
+
+    if(newNode->data == NULL)
+    {
+        free(newNode);
+        return -1;
+    }
+
+    newNode->next = NULL;
+
+    memcpy(newNode->data, data, q->memSize);
+
+    if(q->sizeOfQueue == 0)
+    {
+        q->head = q->tail = newNode;
+    }
+    else
+    {
+        q->tail->next = newNode;
+        q->tail = newNode;
+    }
+
+    q->sizeOfQueue++;
+    return 0;
+}
+
+void dequeue(Queue *q, void *data)
+{
+    if(q->sizeOfQueue > 0)
+    {
+        node *temp = q->head;
+        memcpy(data, temp->data, q->memSize);
+
+        if(q->sizeOfQueue > 1)
+        {
+            q->head = q->head->next;
+        }
+        else
+        {
+            q->head = NULL;
+            q->tail = NULL;
+        }
+
+        q->sizeOfQueue--;
+        free(temp->data);
+        free(temp);
+    }
+}
+
+void queuePeek(Queue *q, void *data)
+{
+    if(q->sizeOfQueue > 0)
+    {
+        node *temp = q->head;
+        memcpy(data, temp->data, q->memSize);
+    }
+}
+
+int getQueueSize(Queue *q)
+{
+    return q->sizeOfQueue;
+}
 
 
 
-int isKeyword(char* word){
 
-    char keywords[4][6] = {
+int isKeyword(char* word)
+{
+
+    char keywords[4][6] =
+    {
         "if",
         "ifnot",
         "go",
@@ -40,8 +149,10 @@ int isKeyword(char* word){
 
     //printf("lower : %d\n", sizeof(keywords) / sizeof(keywords[0]));
 
-    for(int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); i++){
-        if(strcmp(word_lower, keywords[i]) == 0){
+    for(int i = 0; i < (int)(sizeof(keywords) / sizeof(keywords[0])); i++)
+    {
+        if(strcmp(word_lower, keywords[i]) == 0)
+        {
             return 1;
         }
     }
@@ -49,11 +160,14 @@ int isKeyword(char* word){
     return 0;
 }
 
-int isValidSymbol(char ch){
+int isValidSymbol(char ch)
+{
     char symbols[] = { '<', '>', '{', '}'};
 
-    for(int i = 0; i < (int)(sizeof(symbols) / sizeof(symbols[0])); i++){
-        if(ch == symbols[i]){
+    for(int i = 0; i < (int)(sizeof(symbols) / sizeof(symbols[0])); i++)
+    {
+        if(ch == symbols[i])
+        {
             return 1;
         }
     }
@@ -61,77 +175,139 @@ int isValidSymbol(char ch){
     return 0;
 }
 
-int isOperator(char ch){
-    if(ch == '/' || ch == '*'){
-        return 1;
-    }
-    return 0;
-}
-
-int isEOL(char ch){
-    if(ch == ';'){
-        return 1;
-    }
-    return 0;
-}
-
-int isDelimiter(char ch){
-    if(ch == ' ' || ch == '\n' || isEOL(ch) == 1 || isValidSymbol(ch)){
-        return 1;
-    }
-
-    return 0;
-}
-
-LexerStackNode* Lexer(char* str){
-    LexerStackNode *iter = NULL;
-    printf("Lexer str:%s", str);
-
-    return iter;
-}
-
-int pushLexerStack(LexerStackNode **iter, Token *newToken){
-    printf("\nisnull %d", iter == NULL);
-
-    LexerStackNode* newNode= (LexerStackNode * )malloc(sizeof(LexerStackNode));
-
-    int success = newNode != NULL;
-
-    if(success){
-        newNode->token = newToken;
-        newNode->next = *iter;
-        *iter = newNode;
-    }
-
-    return success;
-}
-
-int pop( LexerStackNode **stack, Token **token)
+int isOperator(char ch)
 {
-    int success = *stack != NULL;
-
-    if ( success )
+    if(ch == '/' || ch == '*')
     {
-        printf("\ninit pop: %d\n", *stack);
-        printf("\nnext pop: %d\n", (*stack)->next);
-//        LexerStackNode *p = *stack;
-        *token = (* stack)->token;
-        *stack = ( *stack )->next;
-//        printf("\nwill pop: %d\n", p->token);
-
-//        free( p );
+        return 1;
     }
-
-    return success;
+    return 0;
 }
 
-void printLexerStack(LexerStackNode *iter){
-     printf("\n");
-     LexerStackNode *temp = iter;
-     while(temp!=NULL){
-           printf("%d < ", &(temp->token));
-           temp=temp->next;
-     }
+int isEOL(char ch)
+{
+    if(ch == ';')
+    {
+        return 1;
+    }
+    return 0;
+}
+
+int isDelimiter(char ch)
+{
+    if(ch == ' ' || ch == '\n' || ch == '\0' || isEOL(ch) == 1 || isValidSymbol(ch))
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+char *subString(char *str, int left, int right)
+{
+    int i;
+    char *subStr = (char *)malloc(
+                       sizeof(char) * (right - left + 2));
+
+    for (i = left; i <= right; i++)
+        subStr[i - left] = str[i];
+    subStr[right - left + 1] = '\0';
+    return (subStr);
+
+}
+
+
+Queue Lexer(char* str)
+{
+
+    Queue q;
+    queueInit(&q, sizeof(LexerNode));
+
+//    printf("Lexer str:%s", str);
+    int codeLength = strlen(str);
+
+    int right = 0;
+    int left = 0;
+    int isPathBegin = 0;
+
+    while (right <= codeLength)
+    {
+        char *subStr = subString(str, left, right);
+
+        if(isPathBegin == 0 &&
+           isalpha(str[right]) == 0 &&
+           isDelimiter(str[right]) == 0 &&
+           isOperator(str[right]) == 0)
+        {
+            printf("\n!ERROR: Unknown char %c\n", str[right]);
+            exit(0);
+        }
+
+        if(isPathBegin == 0 && isOperator(str[right]) == 1)
+        {
+            printf("\n!ERROR: Could not use %c operator outside of path.\n", str[right]);
+            exit(0);
+        }
+
+        if(isPathBegin){
+            if(str[right] == '>')
+            {
+                printf("PATH: %s\n", subStr);
+
+                left=right +1;
+                isPathBegin=0;
+            }
+
+            right++;
+            continue;
+        }
+
+        if (isDelimiter(str[right]) == 0)
+        {
+            right++;
+        }
+
+        if (isDelimiter(str[right]) == 1 && left == right)
+        {
+            if(isOperator(str[left])){
+                printf("DELIMITER: %c\n", str[left]);
+            }
+
+            if(isEOL(str[left])){
+                printf("EOL\n");
+                Token *newToken;
+                newToken->type = EOL;
+                enqueue(&q, )
+            }
+
+            if(isValidSymbol(str[left])){
+                if(str[left] == '<'){
+                    isPathBegin = 1;
+                    left=right;
+                    continue;
+                }
+
+            }
+
+            right++;
+            left = right;
+        }
+        else if (isDelimiter(str[right]) == 1 && left != right || (right == codeLength && left != right)){
+
+            if(isKeyword(subStr)){
+                printf("KEYWORD: %s\n", subStr);
+            }else{
+                printf("\n!ERROR: Unknown keyword '%s'\n", subStr);
+                exit(0);
+            }
+
+            left = right;
+        }
+
+
+    }
+
+    return q;
 }
 
 void printToken(Token *st)
@@ -139,58 +315,95 @@ void printToken(Token *st)
     printf("Contents of structure value : %s, type: %d\n", st->value, st->type);
 }
 
-int main()
+
+void readFile(char *filename, char *mode, char **buf)
 {
+    FILE *fp;
+    fp = fopen(filename, mode);
+    if (fp == NULL)
+    {
+        perror("Error while opening the file.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    unsigned long numbytes;
+    char *buffer;
+
+    /* Get the number of bytes */
+    fseek(fp, 0L, SEEK_END);
+    numbytes = ftell(fp);
+
+    // reset the fp position indicator to
+    // the beginning of the fp
+    fseek(fp, 0L, SEEK_SET);
+
+    // grab sufficient memory for the
+    // buffer to hold the text */
+    buffer = (char *)calloc(numbytes, sizeof(char));
+
+    /* memory error */
+    if (buffer == NULL)
+        exit(EXIT_FAILURE);
+
+    /* copy all the text into the buffer */
+    fread(buffer, sizeof(char), numbytes, fp);
+
+    *buf = buffer;
+    fclose(fp);
+    return;
+}
+
+
+int main(int argc, char **argv)
+{
+//    if(argc <= 1){
+//        printf("You should give a file name to read. \n\n Example usage: \
+//               %s yourpmkfile.pmk \n\n", argv[0]);
+////               exit(0);
+//    }
+
+
     char string_two[] = "IF";
     char* input= "if <*> {   go <*>; make <data/doctors>;if <user/ahmet> go <path_expression>;}";
 
-//    int returnValue = isKeyword(string_two);
-//    printf("input : %s \nreturnValue: %d\n", input, returnValue);
-//    printf("%d\n", isValidSymbol('?'));
+    char *fp;
+    char file_name[] = "code.pmk";
+    readFile(file_name, "r", &fp);
 
+    printf("The contents of %s file are: \n--------------------\n%s \n--------------------\n", file_name, fp);
 
-    LexerStackNode* iter = Lexer(input);
+//    TODO:
+//    Queue lexerQueue = Lexer(input);
+//    ParseTree pt = Parser(lexerQueue);
+//    runParseTree(pt);
 
-    Token token1;
-    token1.type = CONDITION;
-//    printf("\nttype: %d\n", token1->type);
-    Token token2;
-    token2.type = PATH;
-//    printf("\nttype: %d\n", token1->type);
-    Token token3;
-    token3.type = COMMAND;
+    Token *newToken;
+    newToken->type = MAKE;
 
-    pushLexerStack(&iter, &token1);
-    printf("\nstack:\n");
-    printLexerStack(iter);
+    Queue lexerQueue= Lexer(fp);
+    LexerNode lexNode1;
 
-    printf("");
-    pushLexerStack(&iter, &token2);
-    printLexerStack(iter);
+    printf("\n enqueued: %d", lexNode1);
 
-    printf("");
-    pushLexerStack(&iter, &token3);
-    printLexerStack(iter);
+    lexNode1.token = newToken;
+    enqueue(&lexerQueue, &lexNode1);
 
-    printf("\npop:\n");
+    LexerNode peekValue;
+    queuePeek(&lexerQueue, &peekValue);
 
-    Token *token4;
-    printf("not poped %d\n", token4);
-    pop(&iter, &token4);
-    printf("ttype %d, poped: %d", COMMAND, token4->type);
-
-
-    printf("not poped %d\n", token4);
-    pop(&iter, &token4);
-    printf("ttype %d, poped: %d", COMMAND, token4->type);
-//    printToken(token4);
-
-    printf("\n");
-    printLexerStack(iter);
+    printf("\n peeked: %d", peekValue.token->type);
 
     return 0;
 }
 
+
+/**
+*   TODO
+*   - runIFCommand (isInverse: BOOL): BOOL
+*   - runGOCommand: VOID
+*   - runMAKECommand: BOOL
+*
+*/
 
 /*
 
