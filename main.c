@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <string.h>
 
 typedef enum
 {
@@ -10,6 +11,7 @@ typedef enum
     GO,
     MAKE,
     BLOCK,
+    BLOCK_END,
     EOL
 } TokenType;
 
@@ -221,7 +223,7 @@ Queue Lexer(char* str)
 {
 
     Queue q;
-    queueInit(&q, sizeof(LexerNode));
+    queueInit(&q, sizeof(Token));
 
 //    printf("Lexer str:%s", str);
     int codeLength = strlen(str);
@@ -235,9 +237,9 @@ Queue Lexer(char* str)
         char *subStr = subString(str, left, right);
 
         if(isPathBegin == 0 &&
-           isalpha(str[right]) == 0 &&
-           isDelimiter(str[right]) == 0 &&
-           isOperator(str[right]) == 0)
+                isalpha(str[right]) == 0 &&
+                isDelimiter(str[right]) == 0 &&
+                isOperator(str[right]) == 0)
         {
             printf("\n!ERROR: Unknown char %c\n", str[right]);
             exit(0);
@@ -249,10 +251,15 @@ Queue Lexer(char* str)
             exit(0);
         }
 
-        if(isPathBegin){
+        if(isPathBegin)
+        {
             if(str[right] == '>')
             {
                 printf("PATH: %s\n", subStr);
+                Token newToken;
+                newToken.type = PATH;
+
+                enqueue(&q, &newToken);
 
                 left=right +1;
                 isPathBegin=0;
@@ -269,19 +276,41 @@ Queue Lexer(char* str)
 
         if (isDelimiter(str[right]) == 1 && left == right)
         {
-            if(isOperator(str[left])){
+            if(isOperator(str[left]))
+            {
                 printf("DELIMITER: %c\n", str[left]);
             }
 
-            if(isEOL(str[left])){
-                printf("EOL\n");
-                Token *newToken;
-                newToken->type = EOL;
-                enqueue(&q, )
+            if(str[left] == '{')
+            {
+                printf("BLOCK\n");
+                Token newToken;
+                newToken.type = BLOCK;
+
+                enqueue(&q, &newToken);
+            }else if(str[left] == '}')
+            {
+                printf("BLOCK\n");
+                Token newToken;
+                newToken.type = BLOCK_END;
+
+                enqueue(&q, &newToken);
             }
 
-            if(isValidSymbol(str[left])){
-                if(str[left] == '<'){
+            if(isEOL(str[left]))
+            {
+                printf("EOL\n");
+                Token newToken;
+                newToken.type = EOL;
+
+                enqueue(&q, &newToken);
+
+            }
+
+            if(isValidSymbol(str[left]))
+            {
+                if(str[left] == '<')
+                {
                     isPathBegin = 1;
                     left=right;
                     continue;
@@ -292,11 +321,42 @@ Queue Lexer(char* str)
             right++;
             left = right;
         }
-        else if (isDelimiter(str[right]) == 1 && left != right || (right == codeLength && left != right)){
+        else if (isDelimiter(str[right]) == 1 && left != right || (right == codeLength && left != right))
+        {
 
-            if(isKeyword(subStr)){
+            if(isKeyword(subStr))
+            {
                 printf("KEYWORD: %s\n", subStr);
-            }else{
+                Token newToken;
+                //newToken->type = EOL;
+
+                if(strcmp(subStr, "if") == 0)
+                {
+                    printf("IF\n");
+                    newToken.type = CONDITION;
+                }
+                else if(strcmp(subStr, "ifnot") == 0)
+                {
+                    printf("IFNOT\n");
+                    newToken.type = CONDITION_INVERSE;
+                }
+                else if(strcmp(subStr, "go") == 0)
+                {
+                    printf("GO\n");
+                    newToken.type = GO;
+                }
+                else if(strcmp(subStr, "make") == 0)
+                {
+                    printf("MAKE\n");
+                    newToken.type = MAKE;
+                }
+
+
+                enqueue(&q, &newToken);
+
+            }
+            else
+            {
                 printf("\n!ERROR: Unknown keyword '%s'\n", subStr);
                 exit(0);
             }
@@ -381,17 +441,27 @@ int main(int argc, char **argv)
     newToken->type = MAKE;
 
     Queue lexerQueue= Lexer(fp);
-    LexerNode lexNode1;
+//    LexerNode lexNode1;
+//
+//    printf("\n enqueued: %d", lexNode1);
+//
+//    lexNode1.token = newToken;
+//    enqueue(&lexerQueue, &lexNode1);
 
-    printf("\n enqueued: %d", lexNode1);
+    printf("---1\n");
 
-    lexNode1.token = newToken;
-    enqueue(&lexerQueue, &lexNode1);
+    Token peekValue;
+//    dequeue(&lexerQueue, &peekValue);
+//    printf("\n 1.peeked: %d", peekValue.type);
+//
+//    dequeue(&lexerQueue, &peekValue);
+//    printf("\n 2.peeked: %d", peekValue.type);
 
-    LexerNode peekValue;
-    queuePeek(&lexerQueue, &peekValue);
-
-    printf("\n peeked: %d", peekValue.token->type);
+    while(getQueueSize(&lexerQueue) > 0)
+    {
+        dequeue(&lexerQueue, &peekValue);
+        printf("%d has been dequeued.\n", peekValue.type);
+    }
 
     return 0;
 }
