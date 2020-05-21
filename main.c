@@ -30,15 +30,6 @@ typedef struct ParseTreeNode
     struct ParseTreeNode* block;
 } ParseTreeNode;
 
-/**
-* Stack node for Lexical analyzer tokens
-*/
-typedef struct LexerNode
-{
-    Token *token;
-} LexerNode;
-
-
 // Queue
 typedef struct Node
 {
@@ -258,7 +249,7 @@ Queue Lexer(char* str)
                 printf("PATH: %s\n", subStr);
                 Token newToken;
                 newToken.type = PATH;
-
+                newToken.value = subStr;
                 enqueue(&q, &newToken);
 
                 left=right +1;
@@ -286,13 +277,14 @@ Queue Lexer(char* str)
                 printf("BLOCK\n");
                 Token newToken;
                 newToken.type = BLOCK;
-
+                newToken.value = NULL;
                 enqueue(&q, &newToken);
             }else if(str[left] == '}')
             {
                 printf("BLOCK\n");
                 Token newToken;
                 newToken.type = BLOCK_END;
+                newToken.value = NULL;
 
                 enqueue(&q, &newToken);
             }
@@ -302,6 +294,7 @@ Queue Lexer(char* str)
                 printf("EOL\n");
                 Token newToken;
                 newToken.type = EOL;
+                newToken.value = NULL;
 
                 enqueue(&q, &newToken);
 
@@ -334,21 +327,25 @@ Queue Lexer(char* str)
                 {
                     printf("IF\n");
                     newToken.type = CONDITION;
+                    newToken.value = NULL;
                 }
                 else if(strcmp(subStr, "ifnot") == 0)
                 {
                     printf("IFNOT\n");
                     newToken.type = CONDITION_INVERSE;
+                    newToken.value = NULL;
                 }
                 else if(strcmp(subStr, "go") == 0)
                 {
                     printf("GO\n");
                     newToken.type = GO;
+                    newToken.value = NULL;
                 }
                 else if(strcmp(subStr, "make") == 0)
                 {
                     printf("MAKE\n");
                     newToken.type = MAKE;
+                    newToken.value = NULL;
                 }
 
 
@@ -364,7 +361,7 @@ Queue Lexer(char* str)
             left = right;
         }
 
-
+        free(subStr);
     }
 
     return q;
@@ -460,7 +457,7 @@ int main(int argc, char **argv)
     while(getQueueSize(&lexerQueue) > 0)
     {
         dequeue(&lexerQueue, &peekValue);
-        printf("%d has been dequeued.\n", peekValue.type);
+        printf("%d has been dequeued. value: %s\n", peekValue.type, peekValue.value != '\0' ? peekValue.value : "");
     }
 
     return 0;
