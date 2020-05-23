@@ -1,7 +1,8 @@
 if <*> {
- go <*>; make <data/doctors>;
+ go  <a*>; make <data/doctors>;
  if <user/ahmet> go <path_expression>;
-	if <*> {
+	if <b*> {
 		make <henlo>;
+go <other>;
 	}
 }

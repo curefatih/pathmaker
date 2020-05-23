@@ -28,7 +28,7 @@ typedef struct ParseNode
     char* path;
     int isBlock;
     struct ParseNode* next;
-    struct ParseNode* block;
+    struct ParseQ* block;
 } ParseQNode;
 
 typedef struct ParseQ
@@ -66,16 +66,16 @@ int parseQAdd(ParseQ *pt, ParseQNode *newNode)
     }
 
     pt->size++;
+    //printf("q size: %d\n", pt->size);
     return 0;
 }
 
 void parseQdequeue(ParseQ *pt, ParseQNode **returnValue)
 {
-    //printf("pqd: %d\n", pt);
+    //printf("pqd: %d, %d, %s\n", pt->size, pt->root->isBlock, pt->root->path);
     if(pt->size > 0)
     {
         *returnValue = pt->root;
-
         if(pt->size > 1)
         {
             pt->root = pt->root->next;
@@ -83,10 +83,11 @@ void parseQdequeue(ParseQ *pt, ParseQNode **returnValue)
         {
             pt->root = NULL;
             pt->tail = NULL;
+
         }
 
         pt->size--;
-        //printf("dequeued ff: %d, command: %d\n", *returnValue, (*returnValue)->command);
+        //printf("dequeued ff: %d, command: %d, path: %s, size: %d \n", *returnValue, (*returnValue)->isBlock, (*returnValue)->path, (*returnValue)->block->size);
     }
 
 }
@@ -453,8 +454,8 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
             //printf("Checking for block end %d\n", getQueueSize(q));
             if(peekValue.type == BLOCK_END)
             {
-                printf("%*sending block\n", level*4, "");
-                return &PT;
+                printf("%*sending block size: %d\n", level*4, "", PT->size);
+                return PT;
             }else if(getQueueSize(q) == 0 && peekValue.type != BLOCK_END)
             {
                 printf("\nERROR: Block ending expected but there is no ending! \n");
@@ -467,8 +468,8 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
         printf("%*s%d dequeued \n", level * 4, "", dequeuedToken->type);
 
-        ParseQNode *parserNode = malloc(sizeof(struct ParseNode));
-        parserNode->isBlock = 0;
+        ParseQNode *parserNode  = malloc(sizeof(struct ParseNode));
+        parserNode->isBlock     = 0;
 
         switch(dequeuedToken->type)
         {
@@ -482,7 +483,7 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
                     if(nextType(q) == PATH){
                         dequeue(q, dequeuedToken);
-                        //parserNode.path = *(dequeuedToken.value);
+                        parserNode->path = (dequeuedToken->value);
                         printf("%*scondition path founded \n", level *4, "");
                     }else{
                         printf("\nERROR: Path expected after condition! \n");
@@ -496,9 +497,11 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                         parserNode->isBlock = 1;
 
                         ParseQ *subQ = malloc(sizeof(struct ParseQ));
+                        parseQInit(subQ);
+
                         subQ = Parser(q, 1, level +1);
                         //printf("here\n");
-                        //printf("subQ size: %d", subQ->size);
+                        printf("subQ size: %d, address: %d\n", subQ->size, subQ);
                         dequeue(q, dequeuedToken);
                         parserNode->block = subQ;
                     }
@@ -507,18 +510,18 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
                         parserNode->isBlock = 1;
 
-                        ParseQ subQ;
-                        parseQInit(&subQ);
+                        ParseQ *subQ = malloc(sizeof(struct ParseQ));
+                        parseQInit(subQ);
                         Token nextToken;
                         dequeue(q, &nextToken);
 
-                        ParseQNode cmd;
-                        cmd.command = nextToken.type;
+                        ParseQNode *cmd= malloc(sizeof(struct ParseNode));
+                        cmd->command = nextToken.type;
 
                         if(nextType(q) == PATH){
                             dequeue(q, &nextToken);
-                            //parserNode.path = *(dequeuedToken.value);
-                            printf("%*scondition command path founded\n", level*4, "");
+                            cmd->path = dequeuedToken->value;
+                            //printf("%*scondition command path founded\n", level*4, "");
                         }else{
                             printf("\nERROR: Path expected after command! \n");
                             exit(0);
@@ -527,20 +530,24 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                         if(nextType(q) == EOL)
                         {
                             dequeue(q, &nextToken);
-                            printf("%*scondition command eol founded\n", level * 4, "");
+                            //printf("%*scondition command eol founded\n", level * 4, "");
                         }else{
                             printf("\nERROR: End of line(;) expected after command! \n");
                             exit(0);
                         }
 
-                        subQ.root = &cmd;
-                        parserNode->block = &subQ;
+                        //parseQAdd(subQ, cmd);
+                        //printf("aaaasubQ size: %d\n", subQ->size);
+                        parserNode->block = subQ;
                     }
                     else
                     {
                         printf("\nERROR: End of line(;) or code block expected after condition! \n");
                         exit(0);
                     }
+
+                    printf("%*scondition address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
+
                     break;
                 }
             case GO:
@@ -551,7 +558,7 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     if(nextType(q) == PATH){
                         dequeue(q, dequeuedToken);
                         parserNode->path = dequeuedToken->value;
-                        printf("%*scommand path founded \n", level *4, "");
+                        //printf("%*scommand path founded \n", level *4, "");
                     }else{
                         printf("\nERROR: Path expected after command! \n");
                         exit(0);
@@ -560,11 +567,13 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     if(nextType(q) == EOL)
                     {
                         dequeue(q, dequeuedToken);
-                        printf("%*scommand eol founded\n", level * 4, "");
+                        //printf("%*scommand eol founded\n", level * 4, "");
                     }else{
                         printf("\nERROR: End of line(;) expected after command! \n");
                         exit(0);
                     }
+
+                   printf("%*scommand address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
 
                  break;
                 }
@@ -575,7 +584,7 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
         }
 
-        //printf("\n parse node:::: %d", parserNode->command);
+
         parseQAdd(PT, parserNode);
 
 //         i++;
@@ -593,23 +602,32 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
         printf("\nERROR: Block ending expected but there is no ending! \n");
         exit(0);
     }
-
+    printf("Q %d, Q size: %d", PT ,PT->size);
     return PT;
 }
 
-void ProgramRunner(ParseQ *PQ)
+void ProgramRunner(ParseQ *PQ, int level)
 {
-    printf("\n parser size: %d, p: %d", PQ->size, PQ->root->command);
+//    printf("PRRRR");
+//    printf("\n->parser size: %d,", PQ->size);
     while(PQ->size > 0)
     {
-        printf("\nPQsize: %d\n", PQ->size);
-        ParseQNode *dequeued = malloc(sizeof(struct ParseNode));
-        parseQdequeue(PQ, &dequeued);
-        printf("dequeued: %d, command: %d\n", dequeued, dequeued->command);
+//        printf("\nPQsize: %d\n", PQ->size);
+        ParseQNode *pqn = malloc(sizeof(struct ParseNode));
+        parseQdequeue(PQ, &pqn);
+
+//        printf("\ndequeued: %d, isblock: %d, path: %s, block: %d\n", pqn, pqn->isBlock, pqn->path, &pqn->block);
+
+        if(pqn->isBlock == 1 && pqn->command == CONDITION || pqn->command == CONDITION_INVERSE)
+        {
+            printf("\n%*sits a condition: %d blocksize: %d\n", level*4, "", &pqn->block);
+            ProgramRunner(pqn->block, level +1);
+//            printf("\n<<<<returned recursive\n");
+        }else{
+            printf("%*sits not a condition: %d\n", level*4, "",  pqn->command);
+        }
     }
-    /**
-    *   TODO---************************
-    */
+
 }
 
 void printToken(Token *st)
@@ -713,9 +731,99 @@ int main(int argc, char **argv)
 //        dequeue(&lexerQueue, &peekValue);
 //        printf("%d has been dequeued. value: %s\n", peekValue.type, peekValue.value != '\0' ? peekValue.value : "");
 //    }
-    printf("\nparser << %d", parseQueue);
-    printf("\nPQsize: %d", parseQueue->size);
-    ProgramRunner(parseQueue);
+    //printf("\nparser << %d", parseQueue);
+//    printf("\nPQ: %d, PQsize: %d\n\n", parseQueue, parseQueue->size);
+    ProgramRunner(parseQueue, 0);
+
+//
+////
+//    ParseQNode *pqn = malloc(sizeof(struct ParseNode));
+//    ParseQNode *temp = malloc(sizeof(struct ParseNode));
+//    parseQdequeue(parseQueue, &pqn);
+//    printf("\ndequeued: %d, isblock: %d, path: %s, block: %d\n", pqn, pqn->isBlock, pqn->path, pqn->block);
+//
+//    printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+//
+//     // GO
+//    parseQdequeue(pqn->block, &temp);
+//    printf("\n dequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block);
+//    printf("\command: %d",temp->command);
+//    printf("\nsize: %d - %d\n\n",pqn->block->size, pqn->block->root);
+//    // MAKE
+//    parseQdequeue(pqn->block, &temp);
+//    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block);
+//    printf("\command: %d\n\n",temp->command);
+//    printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+//
+//    // if
+//
+//
+//    parseQdequeue(pqn->block, &temp);
+//    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block);
+//    printf("\command: %d\n\n",temp->command);
+//    printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+//
+////    printf("\n\nIF BLOCK -- temp dequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block);
+////
+////    ParseQNode *tempNew;
+////    parseQdequeue(temp->block, &tempNew);
+////    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, tempNew->isBlock, tempNew->path, tempNew->block);
+////    printf("\command: %d\n\n",tempNew->command);
+//
+////
+////    parseQdequeue(temp->block, &tempNew);
+////    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, temp->isBlock, tempNew->path, tempNew->block);
+////    printf("\command: %d\n\n",tempNew->command);
+//
+//
+//    // if block
+//    parseQdequeue(pqn->block, &temp);
+//    printf("saaasddequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block);
+//    printf("\command: %d\n\n",temp->command);
+//    printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+//
+////    printf("\n\ntemp dequeued: %d, isblock: %d, path: %s, block: %d\n", temp, temp->isBlock, temp->path, temp->block->size);
+//
+//    ParseQNode *tempNew = malloc(sizeof(struct ParseNode));
+//
+////    parseQdequeue(temp->block, &tempNew);
+////    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, tempNew->isBlock, tempNew->path, tempNew->block);
+////    printf("\command: %d\n\n",tempNew->command);
+//
+//
+////    printf("\command next: %d, path: %s, size: %d, address: %d, block address: %d\n\n",tempNew->next->command, tempNew->next->path, temp->block->size, tempNew->next, tempNew);
+//
+//    ParseQ *tempNew1 = malloc(sizeof(struct ParseNode));
+//    tempNew1 = temp->block;
+//
+//    printf("\nsize o subQ: %d\n", tempNew1->size);
+//    parseQdequeue(tempNew1, &tempNew);
+//    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, tempNew->isBlock, tempNew->path, tempNew->block);
+//    printf("\command: %d\n\n",tempNew->command);
+//
+//    printf("size o subQ: %d, block address: %d\n", tempNew1->size, tempNew1);
+//    ParseQNode *pq2 = malloc(sizeof(struct ParseNode));
+//    parseQdequeue(tempNew1, &tempNew);
+//    printf("222222dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, tempNew->isBlock, tempNew->path);
+//    printf("\command: %d\n\n",tempNew->command);
+//
+
+//
+//    printf("\command next: %d, path: %s, size: %d\n\n",tempNew->command, tempNew->path, temp->block->size);
+//    parseQdequeue(tempNew1, &tempNew);
+//    printf("\command dequeded: %d, path: %s, size: %d\n\n",tempNew->command, tempNew->path, temp->block->size);
+    //printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+
+//    parseQdequeue(temp->block, &tempNew);
+//    printf("dequeued: %d, isblock: %d, path: %s, block: %d\n", tempNew, temp->isBlock, tempNew->path, tempNew->block);
+//    printf("\command: %d\n\n",tempNew->command);
+//    printf("\nsize: %d - %d",pqn->block->size, pqn->block->root);
+//
+//
+//
+//    parseQdequeue(pqn->block, &pqn);
+//    printf("\ndequeued: %d, isblock: %d, path: %s, block: %d\n", pqn, pqn->isBlock, pqn->path, pqn->block);
+//    printf("\command: %d",pqn->command);
 
 
 //    ParseQ *PT = malloc(sizeof(ParseQ));
