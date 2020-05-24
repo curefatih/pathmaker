@@ -1,7 +1,9 @@
 # depslib dependency file v1.0
-1590266922 source:p:\uni\2b\pl\p2\proje2\main.c
+1590354858 source:p:\uni\2b\pl\p2\proje2\main.c
 	<stdio.h>
 	<stdlib.h>
 	<ctype.h>
 	<string.h>
+	<sys/types.h>
+	<sys/stat.h>
 
