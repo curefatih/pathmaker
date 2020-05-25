@@ -603,7 +603,12 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
     return PT;
 }
 
-void ProgramRunner(ParseQ *PQ, int level)
+
+int runIFCommand(ParseQNode *cmdNode, char* currentPath);
+char *runGOCommand(ParseQNode *cmdNode, char *pathQueue);
+void runMAKECommand(ParseQNode *cmdNode, char *pathQueue);
+
+void ProgramRunner(ParseQ *PQ, int level, char *currentPath)
 {
 
     while(PQ->size > 0)
@@ -614,17 +619,27 @@ void ProgramRunner(ParseQ *PQ, int level)
 
         if(pqn->isBlock == 1 && pqn->command == CONDITION || pqn->command == CONDITION_INVERSE)
         {
-            printf("\n%*sits a condition: %d blocksize: %d\n", level*4, "", &pqn->block);
-            if(runIFCommand(pqn) == 1)
+            //printf("\n%*sits a condition: %d blocksize: %d\n", level*4, "", &pqn->block);
+            if(runIFCommand(pqn, currentPath) == 1)
             {
                 printf("\n%*sCondition allowed: %s\n", level*4,"", pqn->path);
-                ProgramRunner(pqn->block, level +1);
+                ProgramRunner(pqn->block, level +1, currentPath);
             }else{
                 printf("\n%*sCondition NOT allowed: %s\n", level*4,"", pqn->path);
             }
 
         }else{
-            printf("%*sits not a condition: %d\n", level*4, "",  pqn->command);
+            //printf("%*sits not a condition: %d\n", level*4, "",  pqn->command);
+            if(pqn->command == GO)
+            {
+                char *newPath = runGOCommand(pqn, currentPath);
+                printf("\nGO cmd current path : %s\n", newPath);
+                currentPath = newPath;
+            }else if(pqn->command == MAKE)
+            {
+                runMAKECommand(pqn, currentPath);
+            }
+
         }
     }
 
@@ -641,26 +656,41 @@ int isPathExist(char *path)
     int err = stat(path, &s);
     if(err == -1)
     {
-        perror("\nWarn");
+        //perror("\nWarn");
         //printf("for: %s", path);
         return 0;
     }else
     {
         if(S_ISDIR(s.st_mode)) {
-            printf("\n%s is a dir\n", path);
+            //printf("\n%s is a dir\n", path);
             return 1;
         }
         else {
             /* exists but is no dir */
-            printf("\n%s is exist BUT not dir.\n", path);
+            printf("\n%s is exist BUT not directory.\n", path);
             return -1;
         }
     }
 }
 
-int runIFCommand(ParseQNode *cmdNode)
+int makePath(char *path)
 {
-    int pathStatus = isPathExist(cmdNode->path);
+    int check = mkdir(path, 0700);
+    if (!check)
+        printf("Directory created\n");
+    else {
+        printf("Unable to create directory\n");
+        //exit(1);
+    }
+}
+
+
+char *concatPaths(char* str1, char*str2);
+char *concatStrings(char* str1, char* str2);
+int runIFCommand(ParseQNode *cmdNode, char *currentPath)
+{
+    char *wantedPath = concatPaths(currentPath, cmdNode->path);
+    int pathStatus = isPathExist(wantedPath);
     if((cmdNode->command == CONDITION && pathStatus == 1) || (cmdNode->command == CONDITION_INVERSE && pathStatus == 0))
     {
         return 1;
@@ -676,6 +706,61 @@ int runIFCommand(ParseQNode *cmdNode)
 // int runMAKECommand(ParseQNode *cmdNode, PathQueue *pq) -> concat pq values and cmdNode->path then mkdir
 // int runGOCommand(ParseQNode *cmdNode, PathQueue *pq) -> enqueue cmdNode->path to pq, before enqueue pq values and cmdNode->path and control that is exist? if is not, not enqueue -> print error
 
+void runMAKECommand(ParseQNode *cmdNode, char *path)
+{
+    char *wantedPath = concatPaths(path, cmdNode->path);
+    //printf("\nMAKE total path: %s", wantedPath);
+    int pathStatus = isPathExist(wantedPath);
+    if(pathStatus == 0)
+    {
+        printf("\nMAKE command for: %s is doable", wantedPath);
+        makePath(wantedPath);
+    }else{
+        printf("\nMAKE command for: %s is NOT doable", wantedPath);
+    }
+    return 0;
+}
+
+
+char *runGOCommand(ParseQNode *cmdNode, char *pathQueue)
+{
+    char *wantedPath = concatPaths(pathQueue, cmdNode->path);
+    //printf("\nrungo: %s", wantedPath);
+    int pathExistStatus = isPathExist(wantedPath);
+    if(pathExistStatus == 1)
+    {
+        //printf("\nGO run %s\n", wantedPath);
+        return wantedPath;
+    }else
+    {
+        printf("\nWARNING: Can not use go command due to there is no directory like: %s!\n", wantedPath);
+        return pathQueue;
+    }
+
+}
+
+
+char *concatPaths(char* str1, char* str2)
+{
+    char *wantedPath    = concatStrings(str1, "/");
+    char *wantedPath2   = concatStrings(wantedPath, str2);
+
+    return wantedPath2;
+}
+
+char *concatStrings(char* str1, char* str2)
+{
+    char *result = malloc(strlen(str1) + strlen(str2) + 1); // +1 for the null-terminator
+    // in real code you would check for errors in malloc here
+    if(result == NULL)
+    {
+        printf("\nERROR: Malloc error when attemp to concat paths!\n");
+        exit(0);
+    }
+    strcpy(result, str1);
+    strcat(result, str2);
+    return result;
+}
 
 /**
 * TODO?
@@ -762,24 +847,41 @@ int main(int argc, char **argv)
     printf("The contents of %s file are: \n--------------------\n%s \n--------------------\n", file_name, fp);
 
 
-//    Queue lexerQueue= Lexer(fp);
-//    ParseQ *parseQueue = malloc(sizeof(ParseQ));
-//    parseQueue = Parser(&lexerQueue, 0, 0);
-//    ProgramRunner(parseQueue, 0);
+    Queue lexerQueue= Lexer(fp);
+    ParseQ *parseQueue = malloc(sizeof(ParseQ));
+    parseQueue = Parser(&lexerQueue, 0, 0);
+    char *path =".";
+    ProgramRunner(parseQueue, 0, path);
 
-// isPathExist
+//  isPathExist
 
 //    printf("\n\nSTAT----\n\n");
 //    printf("checking for : /deneme --> exist");
 //    isPathExist("/deneme");
 //    printf("\n\nchecking for : /other --> NOT exist");
 //    isPathExist("/other");
-    printf("\n\nchecking for : /bin --> NOT exist");
-    isPathExist("./bin/Debug/deneme/../../Debug");
+//    printf("\n\nchecking for : /bin --> NOT exist");
+//    isPathExist("./bin/Debug/deneme/../../Debug");
 
-// parsePath
-////    char *rawPath = "< * /* / mydirectory>";
-////    parsePath(" * /* / mydirectory");
+//  parsePath
+//    char *rawPath = "< * /* / mydirectory>";
+//    parsePath(" * /* / mydirectory");
+
+//  concatQueuePaths
+//
+
+//    Queue *pathQueue;
+//    queueInit(pathQueue, sizeof(char *));
+
+//    char *path1 = "/home/fcure";
+//    char *path2 = "/home123/fcure123";
+//    char *concated = concatStrings(path1, path2);
+//    printf("\n:::%s", concated);
+
+//    runGOCommand(parseQueue->root, "/henlo", );
+
+//    enqueue(pathQueue, path1);
+//    enqueue(pathQueue, path2);
 
 
 //   system("pause"); // this will stop the pause
