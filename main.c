@@ -585,20 +585,20 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     }
                     else if(nextTypeValue == GO || nextTypeValue == MAKE)
                     {
-
+                        printf("\ninline\n");
                         parserNode->isBlock = 1;
 
                         ParseQ *subQ = malloc(sizeof(struct ParseQ));
                         parseQInit(subQ);
-                        Token nextToken;
-                        dequeue(q, &nextToken);
+                        Token *nextToken = malloc(sizeof(struct Token));
+                        dequeue(q, nextToken);
 
                         ParseQNode *cmd= malloc(sizeof(struct ParseNode));
-                        cmd->command = nextToken.type;
+                        cmd->command = nextToken->type;
 
                         if(nextType(q) == PATH){
-                            dequeue(q, &nextToken);
-                            cmd->path = dequeuedToken->value;
+                            dequeue(q, nextToken);
+                            cmd->path = nextToken->value;
                         }else{
                             printf("\nERROR: Path expected after command! \n");
                             system("pause"); exit(0);
@@ -606,14 +606,15 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
                         if(nextType(q) == EOL)
                         {
-                            dequeue(q, &nextToken);
-
+                            dequeue(q, nextToken);
                         }else{
                             printf("\nERROR: End of line(;) expected after command! \n");
                             system("pause"); exit(0);
                         }
 
+                        parseQAdd(subQ, cmd);
                         parserNode->block = subQ;
+                        printf("subq: %s\n", subQ->root->path);
                     }
                     else
                     {
@@ -633,7 +634,6 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     if(nextType(q) == PATH){
                         dequeue(q, dequeuedToken);
                         parserNode->path = dequeuedToken->value;
-                        //printf("%*scommand path founded \n", level *4, "");
                     }else{
                         printf("\nERROR: Path expected after command! \n");
                         system("pause"); exit(0);
@@ -642,15 +642,14 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     if(nextType(q) == EOL)
                     {
                         dequeue(q, dequeuedToken);
-                        //printf("%*scommand eol founded\n", level * 4, "");
                     }else{
                         printf("\nERROR: End of line(;) expected after command! \n");
                         system("pause"); exit(0);
                     }
 
-                   printf("%*scommand address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
+                    printf("%*scommand address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
 
-                 break;
+                    break;
                 }
             default:
                 printf("\nERROR: Any directive must start with condition or command!\n");
@@ -674,7 +673,19 @@ int runIFCommand(ParseQNode *cmdNode, char* currentPath);
 char *runGOCommand(ParseQNode *cmdNode, char *pathQueue);
 void runMAKECommand(ParseQNode *cmdNode, char *pathQueue);
 
-void ProgramRunner(ParseQ *PQ, int level, char *currentPath)
+void getCurrentDir(char *currentPath)
+{
+    char* buffer;
+
+    if( (buffer=getcwd(NULL, 0)) == NULL) {
+        perror("\nWarning: Failed to get current directory\n");
+    } else {
+        printf("Current Directory: %s \nLength: %zu\n", concatPaths(buffer, currentPath), strlen(buffer));
+        free(buffer);
+    }
+}
+
+char* ProgramRunner(ParseQ *PQ, int level, char *currentPath)
 {
     while(PQ->size > 0)
     {
@@ -686,7 +697,8 @@ void ProgramRunner(ParseQ *PQ, int level, char *currentPath)
             if(runIFCommand(pqn, currentPath) == 1)
             {
                 printf("\n%*sCondition allowed: %s\n", level*4,"", pqn->path);
-                ProgramRunner(pqn->block, level +1, currentPath);
+                char *newPath = ProgramRunner(pqn->block, level +1, currentPath);
+                currentPath = newPath;
             }else{
                 printf("\n%*sCondition NOT allowed: %s\n", level*4,"", pqn->path);
             }
@@ -703,8 +715,9 @@ void ProgramRunner(ParseQ *PQ, int level, char *currentPath)
             }
 
         }
+         getCurrentDir(currentPath);
     }
-
+    return currentPath;
 }
 
 /**

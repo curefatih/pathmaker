@@ -1,5 +1,2 @@
-if <bin>{
-  make <trying here>;
-  go <trying here>;
-  make <this/is/a/deep/structure>;
-}
+go<*/*/*/*/*/*>;
+if<go>{}

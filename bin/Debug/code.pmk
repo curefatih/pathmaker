@@ -1,2 +1,2 @@
-make <deneme/1/2/3/_>;
-go <bosenes>;
+go <*/*>;
+if<bin>{ go <*>;};
