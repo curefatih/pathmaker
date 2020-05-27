@@ -1,12 +1,5 @@
-if <bin> {
- go  <bin>; make <Deneme>;
- if <Deneme> go <Deneme>;
-	ifnot <b*> {
-		make <henlo>;
-go <other>;
-	}
-	if <henlo>{
-		go <henlo>;
-		make <henloinside>;
-	}
+if <bin>{
+  make <trying here>;
+  go <trying here>;
+  make <this/is/a/deep/structure>;
 }

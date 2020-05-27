@@ -4,6 +4,8 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+char *concatPaths(char* str1, char*str2);
+char *concatStrings(char* str1, char* str2);
 
 typedef enum
 {
@@ -274,13 +276,109 @@ char *subString(char *str, int left, int right)
 }
 
 
+char *trim (char *s)
+{
+    if(s == NULL) return NULL;
+    int left = 0;
+    while(isspace(s[left])) left++;
+    int right = strlen(s) -1;
+    while(isspace(s[right])) right--;
+    //printf("tottal : %d, left: %d, right: %d", strlen(s), left, right);
+    return subString(s, left, right);
+}
+
+int isValidPath(char *path)
+{
+    const char *delimiter = "/";
+    int pathLength = strlen(path);
+    char cpyPath[pathLength + 1];
+    strcpy(cpyPath, path);
+    cpyPath[pathLength] = '\0';
+
+    if(path == NULL) return 0;
+
+    //printf("\nis valid path: %s", cpyPath);
+
+    int isBeforeAsterisk = 1;
+    char *token;
+
+    /* get the first token */
+    token = strtok(cpyPath, delimiter);
+
+    /* walk through other tokens */
+    while( token != NULL ) {
+      //printf( "\ntokensss: |%s|\n", token );
+      int left = 0;
+      while(left < strlen(token))
+      {
+          //printf("\n token char: %c", token[left] );
+          if(isalnum(token[left]) || token[left] == '_' || token[left] == ' ' ){
+        //    printf("\n token char: %c is alnum", token[left] );
+            isBeforeAsterisk = 0;
+          }
+          else if(token[left] == '.')
+          {
+          //      printf("\n herer");
+              if(isBeforeAsterisk == 1 && token[left + 1] == '.' && token[left + 2] == '\0')
+              {
+            //      printf("\n token char: %c is asterisk", token[left] );
+                  left++;
+              }else
+              {
+                  return 0;
+              }
+          }
+          else
+          {
+              return 0;
+          }
+
+          left++;
+      }
+
+      token = strtok(NULL, delimiter);
+    }
+
+    return 1;
+
+}
+
+char *parsePath(char *path)
+{
+    const char *delimiter = "/";
+    int pathLength = strlen(path);
+    char cpyPath[pathLength + 1];
+    strcpy(cpyPath, path);
+    cpyPath[pathLength] = '\0';
+
+    char *newPath = "";
+
+    char *token;
+    token = trim(strtok(cpyPath, delimiter));
+
+    /* walk through other tokens */
+    while( token != NULL ) {
+//        printf("\n::> %s", s);
+        if(strcmp("*", token) == 0)
+        {
+            newPath = concatPaths(newPath, "..");
+        }else{
+            newPath = concatPaths(newPath, token);
+        }
+
+        token = trim(strtok(NULL, delimiter));
+    }
+    //printf("\n new path: %s", newPath);
+    return newPath;
+}
+
+
 Queue Lexer(char* str)
 {
 
     Queue q;
     queueInit(&q, sizeof(Token));
 
-//    printf("Lexer str:%s", str);
     int codeLength = strlen(str);
 
     int right = 0;
@@ -315,7 +413,13 @@ Queue Lexer(char* str)
                 newToken.type = PATH;
                 subStr = subString(str, left + 1, right -1);
                 printf("PATH: %s\n", subStr);
-                newToken.value = subStr;
+                char* parsedPath = parsePath(subStr);
+                if(isValidPath(parsedPath) == 0 || subStr == NULL || subStr[0] == '/')
+                {
+                    printf("\nERROR: %s is not a valid path!", subStr);
+                    exit(0);
+                }
+                newToken.value = parsedPath;
                 enqueue(&q, &newToken);
 
                 left=right +1;
@@ -677,16 +781,15 @@ int makePath(char *path)
 {
     int check = mkdir(path, 0700);
     if (!check)
-        printf("Directory created\n");
+        printf("\nDirectory created\n");
     else {
-        printf("Unable to create directory\n");
+        printf("\nUnable to create directory\n");
         //exit(1);
     }
 }
 
 
-char *concatPaths(char* str1, char*str2);
-char *concatStrings(char* str1, char* str2);
+
 int runIFCommand(ParseQNode *cmdNode, char *currentPath)
 {
     char *wantedPath = concatPaths(currentPath, cmdNode->path);
@@ -708,23 +811,61 @@ int runIFCommand(ParseQNode *cmdNode, char *currentPath)
 
 void runMAKECommand(ParseQNode *cmdNode, char *path)
 {
-    char *wantedPath = concatPaths(path, cmdNode->path);
-    //printf("\nMAKE total path: %s", wantedPath);
-    int pathStatus = isPathExist(wantedPath);
-    if(pathStatus == 0)
-    {
-        printf("\nMAKE command for: %s is doable", wantedPath);
-        makePath(wantedPath);
-    }else{
-        printf("\nMAKE command for: %s is NOT doable", wantedPath);
+//    char *wantedPath = concatPaths(path, cmdNode->path);
+//    printf("\nMAKE total path: %s", wantedPath);
+//    int pathStatus = isPathExist(wantedPath);
+//    if(pathStatus == 0)
+//    {
+//        printf("\nMAKE command for: %s is doable", wantedPath);
+//        makePath(wantedPath);
+//    }else{
+//        printf("\nMAKE command for: %s is NOT doable", wantedPath);
+//        if(pathStatus == 1)
+//        {
+//            printf("\nWARNING: Path already exist!\n");
+//        }
+//    }
+
+    const char *delimiter = "/";
+    int pathLength = strlen(cmdNode->path);
+    char cpyPath[pathLength + 1];
+    strcpy(cpyPath, cmdNode->path);
+    cpyPath[pathLength] = '\0';
+
+    char *token;
+    token = trim(strtok(cpyPath, delimiter));
+
+    char *pathCumulative = path;
+
+
+    /* walk through other tokens */
+    while( token != NULL ) {
+        pathCumulative = concatPaths(pathCumulative, token);
+        printf("\nMAKE PATH token: %s, CURRENT PATH: %s", pathCumulative, path);
+        int pathStatus = isPathExist(pathCumulative);
+        if(pathStatus == 0)
+        {
+            printf("\nMAKE command for: %s is creatable", pathCumulative);
+            makePath(pathCumulative);
+        }else{
+            printf("\nMAKE command for: %s is NOT creatable", pathCumulative);
+            if(pathStatus == 1)
+            {
+                printf("\nWARNING: Path already exist! Skipping...\n");
+            }
+        }
+        token = trim(strtok(NULL, delimiter));
     }
+    printf("\nMAKE PATH TOTAL: %s, CURRENT PATH: %s", cmdNode->path, path);
+
+
     return 0;
 }
 
 
 char *runGOCommand(ParseQNode *cmdNode, char *pathQueue)
 {
-    char *wantedPath = concatPaths(pathQueue, cmdNode->path);
+    char *wantedPath = concatStrings(pathQueue, cmdNode->path);
     //printf("\nrungo: %s", wantedPath);
     int pathExistStatus = isPathExist(wantedPath);
     if(pathExistStatus == 1)
@@ -762,27 +903,6 @@ char *concatStrings(char* str1, char* str2)
     return result;
 }
 
-/**
-* TODO?
-*/
-void parsePath(char *path)
-{
-
-    int lengthOfString = strlen(path) +1;
-//    printf("stlen: %d", lengthOfString);
-    char pathCopy[lengthOfString];
-    strncpy(pathCopy, path, lengthOfString);
-    pathCopy[lengthOfString] = '\0';
-    char *token;
-//
-//    /* get the first token */
-    char* rest = pathCopy;
-//
-    while ((token = strtok_r(rest, "/", &rest)))
-        printf("\ntoken: %s\n", token);
-//
-//   return(0);
-}
 
 void printToken(Token *st)
 {
@@ -828,6 +948,7 @@ void readFile(char *filename, char *mode, char **buf)
 }
 
 
+
 int main(int argc, char **argv)
 {
 //    if(argc <= 1){
@@ -852,6 +973,23 @@ int main(int argc, char **argv)
     parseQueue = Parser(&lexerQueue, 0, 0);
     char *path =".";
     ProgramRunner(parseQueue, 0, path);
+
+
+// trim
+//    char * str= "     * / * / hel lo ";
+//    printf("\ntrimmed: |%s|", trim(str));
+//    printf("->. %c",str[13]);
+//
+//    char *newPath= parsePath(str);
+//    printf("\ntrimmed path: |%s| isvalid= %d", newPath, isValidPath(newPath));
+
+
+// isValidPath
+//    printf("\n*/*/hello isvalid: %d", isValidPath("*/*/hello"));
+//    printf("\n\n");
+//    printf("\n* /* / hello isvalid: %d", isValidPath("* /* / hello"));
+//    printf("\n\n");
+
 
 //  isPathExist
 
