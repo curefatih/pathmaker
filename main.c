@@ -585,7 +585,6 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                     }
                     else if(nextTypeValue == GO || nextTypeValue == MAKE)
                     {
-                        printf("\ninline\n");
                         parserNode->isBlock = 1;
 
                         ParseQ *subQ = malloc(sizeof(struct ParseQ));
@@ -614,7 +613,7 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
                         parseQAdd(subQ, cmd);
                         parserNode->block = subQ;
-                        printf("subq: %s\n", subQ->root->path);
+                        //printf("subq: %s\n", subQ->root->path);
                     }
                     else
                     {
@@ -675,14 +674,19 @@ void runMAKECommand(ParseQNode *cmdNode, char *pathQueue);
 
 void getCurrentDir(char *currentPath)
 {
-    char* buffer;
+    char *buffer;
+    char *cwd = getcwd(NULL, 0);
 
-    if( (buffer=getcwd(NULL, 0)) == NULL) {
+    chdir(currentPath);
+    if((buffer=getcwd(NULL, 0)) == NULL) {
         perror("\nWarning: Failed to get current directory\n");
     } else {
-        printf("Current Directory: %s \nLength: %zu\n", concatPaths(buffer, currentPath), strlen(buffer));
-        free(buffer);
+        printf("Current Directory: %s \n", buffer);
     }
+
+    chdir(cwd);
+    free(buffer);
+    free(cwd);
 }
 
 char* ProgramRunner(ParseQ *PQ, int level, char *currentPath)
@@ -703,19 +707,24 @@ char* ProgramRunner(ParseQ *PQ, int level, char *currentPath)
                 printf("\n%*sCondition NOT allowed: %s\n", level*4,"", pqn->path);
             }
 
+
         }else{
             if(pqn->command == GO)
             {
+                printf("\nRUNNING GO\n");
                 char *newPath = runGOCommand(pqn, currentPath);
-                printf("\nGO: %s\n", newPath);
+                printf("%s\n", newPath);
                 currentPath = newPath;
+                getCurrentDir(currentPath);
             }else if(pqn->command == MAKE)
             {
+                printf("\nRUNNING MAKE\n");
                 runMAKECommand(pqn, currentPath);
+                getCurrentDir(currentPath);
             }
 
         }
-         getCurrentDir(currentPath);
+
     }
     return currentPath;
 }
@@ -732,12 +741,10 @@ int isPathExist(char *path)
     if(err == -1)
     {
         //perror("\nWarn");
-        //printf("for: %s", path);
         return 0;
     }else
     {
         if(S_ISDIR(s.st_mode)) {
-            //printf("\n%s is a dir\n", path);
             return 1;
         }
         else {
@@ -746,6 +753,85 @@ int isPathExist(char *path)
             return -1;
         }
     }
+}
+
+int isPathsSame(char *path, char *current)
+{
+    char *cwd = getcwd(NULL, 0);
+
+    char *currentDir;
+    char *lookingFor;
+
+    chdir(current);
+    if((currentDir = getcwd(NULL, 0)) == NULL) {
+        perror("Failed to get current directory :: inside isPathsSame\n");
+    } else {
+        chdir(path);
+
+        if( (lookingFor=getcwd(NULL, 0)) == NULL) {
+            perror("Failed to get LOOKING FOR directory :: inside isPathsSame\n");
+            chdir(cwd);
+
+            free(cwd);
+            free(currentDir);
+            free(lookingFor);
+            return 0;
+        } else {
+            chdir(cwd);
+            free(cwd);
+            free(currentDir);
+            free(lookingFor);
+            //printf("compare: %s, %s, %d\n", currentDir, lookingFor, strcmp(currentDir, lookingFor));
+            return strcmp(currentDir, lookingFor);
+        }
+    }
+
+    free(cwd);
+    free(currentDir);
+    free(lookingFor);
+    return strcmp(path, current);
+}
+
+
+void copyString(char *target, char *source)
+{
+    while(*source)
+    {
+        *target = *source;
+        source++;
+        target++;
+    }
+    *target = '\0';
+}
+
+int isPathsSameOrigin(char *path, char *current)
+{
+    const char *delimiter = "/";
+    int pathLength = strlen(path);
+    char cpyPath[pathLength + 1];
+    strcpy(cpyPath, path);
+    cpyPath[pathLength] = '\0';
+
+    char *token;
+    token = strtok(cpyPath, delimiter);
+    while(strcmp(token, ".") == 0){ token = strtok(NULL, delimiter);} // pass first token
+    char *pathCumulative = current;
+
+    char *firstPath = malloc(sizeof(char *));
+    copyString(firstPath, pathCumulative);
+
+    while( token != NULL ) {
+        pathCumulative = concatPaths(pathCumulative, token);
+        int pathsSame = isPathsSame(firstPath, pathCumulative);
+
+        if(pathsSame == 0)
+        {
+            return 1;
+        }
+        copyString(firstPath, pathCumulative);
+        token = strtok(NULL, delimiter);
+    }
+    return 0;
 }
 
 int makePath(char *path)
@@ -763,10 +849,14 @@ int runIFCommand(ParseQNode *cmdNode, char *currentPath)
 {
     char *wantedPath = concatPaths(currentPath, cmdNode->path);
     int pathStatus = isPathExist(wantedPath);
-    if((cmdNode->command == CONDITION && pathStatus == 1) || (cmdNode->command == CONDITION_INVERSE && pathStatus == 0))
+    int pathsSame = isPathsSameOrigin(cmdNode->path, currentPath);
+    if((cmdNode->command == CONDITION && pathStatus == 1 && pathsSame != 1) || (cmdNode->command == CONDITION_INVERSE && pathStatus == 0 && pathsSame == 1))
     {
         return 1;
     }else{
+        if((cmdNode->command == CONDITION && pathsSame == 1) ||  (cmdNode->command == CONDITION_INVERSE && pathsSame != 1)){
+            printf("Passing condition due to: You are trying to check over the root directory.");
+        }
         return 0;
     }
 }
@@ -804,6 +894,11 @@ void runMAKECommand(ParseQNode *cmdNode, char *path)
 
 char *runGOCommand(ParseQNode *cmdNode, char *pathQueue)
 {
+    int pathsSame = isPathsSameOrigin(cmdNode->path, pathQueue);
+    if(pathsSame == 1){
+        printf("WARNING: Passing GO command due to: You are trying to pass over the root directory.\n");
+        return pathQueue;
+    }
     char *wantedPath = concatStrings(pathQueue, cmdNode->path);
     int pathExistStatus = isPathExist(wantedPath);
     if(pathExistStatus == 1)
@@ -838,10 +933,6 @@ char *concatStrings(char* str1, char* str2)
     return result;
 }
 
-void printToken(Token *st)
-{
-    printf("Contents of structure value : %s, type: %d\n", st->value, st->type);
-}
 
 void readFile(char *filename, char *mode, char **buf)
 {
@@ -899,13 +990,16 @@ int main()
     ParseQ *parseQueue = malloc(sizeof(ParseQ));
     parseQueue = Parser(&lexerQueue, 0, 0);
     printf("\n\n\n--------------------\nProgramRunner\n--------------------\n");
+    char *cwd = getcwd(NULL, 0);
     char *path =".";
-    ProgramRunner(parseQueue, 0, path);
+    ProgramRunner(parseQueue, 0, cwd);
 
     free(path);
     free(fp);
     free(parseQueue);
     system("pause");
+
+//    isPathsSameOrigin("../..", "./../hello");
 
     return 0;
 }

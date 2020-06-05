@@ -1,2 +1,5 @@
-go<*/*/*/*/*/*>;
-if<go>{}
+if <DENEME>{ go<DENEME>; }
+
+make <heelo>;
+
+if <*/deneme> {}
