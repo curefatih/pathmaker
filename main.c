@@ -524,7 +524,9 @@ TokenType nextType(Queue *q)
    return peekedValue.type;
 }
 
-ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
+// declare
+char* ProgramRunner(ParseQ *PQ, int level, char *currentPath);
+char *Parser(Queue *q, int isLookingForBlockEnd, int level, char* currentPath)
 {
     ParseQ *PT = malloc(sizeof(struct ParseQ));
     parseQInit(PT);
@@ -539,9 +541,11 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
             if(peekValue.type == BLOCK_END)
             {
-                printf("%*sending block size: %d\n", level*4, "", PT->size);
-                return PT;
-            }else if(getQueueSize(q) == 0 && peekValue.type != BLOCK_END)
+                printf("%*sBLOCK END, size: %d\n", level*4, "", PT->size);
+                char* subQRunnerResponse = ProgramRunner(PT, level, currentPath);
+                return subQRunnerResponse;
+                //return PT;
+            }else if(getQueueSize(q) == 1 && peekValue.type != BLOCK_END)
             {
                 printf("\nERROR: Block ending expected but there is no ending! \n");
                 system("pause"); exit(0);
@@ -559,13 +563,14 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
             case CONDITION:
             case CONDITION_INVERSE:
                 {
-                    printf("%*sCondition \n", level *4, "");
+                    printf("%*sCONDITION \n", level *4, "");
 
                     parserNode->command = dequeuedToken->type;
 
                     if(nextType(q) == PATH){
                         dequeue(q, dequeuedToken);
                         parserNode->path = (dequeuedToken->value);
+                        printf("%*sCONDITION PATH: %s \n", level *4, "", dequeuedToken->value);
                     }else{
                         printf("\nERROR: Path expected after condition! \n");
                         system("pause"); exit(0);
@@ -577,11 +582,10 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                         dequeue(q, dequeuedToken);
                         parserNode->isBlock = 1;
 
-                        ParseQ *subQ = malloc(sizeof(struct ParseQ));
-                        parseQInit(subQ);
+                        char *subQ = malloc(sizeof(char *));
 
-                        subQ = Parser(q, 1, level +1);
-
+                        char *subQResponse = Parser(q, 1, level +1, currentPath);
+                        currentPath = subQResponse;
                         dequeue(q, dequeuedToken);
                         parserNode->block = subQ;
                     }
@@ -615,16 +619,15 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
 
                         parseQAdd(subQ, cmd);
                         parserNode->block = subQ;
-                        //printf("subq: %s\n", subQ->root->path);
+//                        char* subQRunnerResponse = ProgramRunner(subQ, level, currentPath);
+//                        currentPath = subQRunnerResponse;
+//                        printf("CURRENT PATH UPDATED: %s \n", currentPath);
                     }
                     else
                     {
                         printf("\nERROR: End of line(;) or code block expected after condition! \n");
                         system("pause"); exit(0);
                     }
-
-                    printf("%*scondition address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
-
                     break;
                 }
             case GO:
@@ -648,7 +651,7 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                         system("pause"); exit(0);
                     }
 
-                    printf("%*scommand address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
+                    //printf("%*scommand address: %d, command: %d, path: %s\n", level *4, "", parserNode, parserNode->command, parserNode->path);
 
                     break;
                 }
@@ -657,16 +660,21 @@ ParseQ *Parser(Queue *q, int isLookingForBlockEnd, int level)
                 system("pause"); exit(0);
                 break;
         }
-
         parseQAdd(PT, parserNode);
+        char* subQRunnerResponse = ProgramRunner(PT, level, currentPath);
+        currentPath = subQRunnerResponse;
+//        return subQRunnerResponse ;
     }
 
-    printf("%*sEnding block\n", level*4, "");
+    printf("%*sBLOCK END.2\n", level*4, "");
     if(isLookingForBlockEnd == 1){
         printf("\nERROR: Block ending expected but there is no ending! \n");
         system("pause"); exit(0);
     }
-    return PT;
+
+    char* subQRunnerResponse = ProgramRunner(PT, level, currentPath);
+    return subQRunnerResponse ;
+    //return PT;
 }
 
 // Declare
@@ -702,11 +710,8 @@ char* ProgramRunner(ParseQ *PQ, int level, char *currentPath)
         {
             if(runIFCommand(pqn, currentPath) == 1)
             {
-                printf("\n%*sCondition allowed: %s\n", level*4,"", pqn->path);
                 char *newPath = ProgramRunner(pqn->block, level +1, currentPath);
                 currentPath = newPath;
-            }else{
-                printf("\n%*sCondition NOT allowed: %s\n", level*4,"", pqn->path);
             }
 
 
@@ -763,11 +768,12 @@ int isPathsSame(char *path, char *current)
     char *currentDir;
     char *lookingFor;
 
-    chdir(current);
+
+    int curretstatus = chdir(current);
     if((currentDir = getcwd(NULL, 0)) == NULL) {
         perror("Failed to get current directory :: inside isPathsSame\n");
     } else {
-        chdir(path);
+        int pathstatus = chdir(path);
 
         if( (lookingFor=getcwd(NULL, 0)) == NULL) {
             perror("Failed to get LOOKING FOR directory :: inside isPathsSame\n");
@@ -780,8 +786,6 @@ int isPathsSame(char *path, char *current)
         } else {
             chdir(cwd);
             free(cwd);
-            free(currentDir);
-            free(lookingFor);
             return strcmp(currentDir, lookingFor);
         }
     }
@@ -792,19 +796,15 @@ int isPathsSame(char *path, char *current)
     return strcmp(path, current);
 }
 
-void copyString(char *target, char *source)
-{
-    while(*source)
-    {
-        *target = *source;
-        source++;
-        target++;
-    }
-    *target = '\0';
+size_t strlen_p(char * s) {
+    char *p = s;
+    for (; *p != '\0'; p++) {}
+    return p - s;
 }
 
 int isPathsSameOrigin(char *path, char *current)
 {
+
     const char *delimiter = "/";
     int pathLength = strlen(path);
     char cpyPath[pathLength + 1];
@@ -813,21 +813,26 @@ int isPathsSameOrigin(char *path, char *current)
 
     char *token;
     token = strtok(cpyPath, delimiter);
-    while(strcmp(token, ".") == 0){ token = strtok(NULL, delimiter);} // pass first token
-    char *pathCumulative = current;
+    if(strcmp(token, ".") == 0){ token = strtok(NULL, delimiter); printf("while: %s \n", token);} // pass first token
 
-    char *firstPath = malloc(sizeof(char *));
-    copyString(firstPath, pathCumulative);
+    char* pathCumulative = current;
+    strcpy(pathCumulative, current);
+
+    char *cwd = getcwd(NULL, 0);
+
+    char *firstPath = current;
 
     while( token != NULL ) {
-        pathCumulative = concatPaths(pathCumulative, token);
-        int pathsSame = isPathsSame(firstPath, pathCumulative);
 
-        if(pathsSame == 0)
-        {
-            return 1;
+        pathCumulative = concatPaths(pathCumulative, token);
+
+        if(strcmp(firstPath, "") != 0){
+
+            int sameResult = isPathsSame(firstPath, pathCumulative);
+            if(sameResult == 0) return 1;
         }
-        copyString(firstPath, pathCumulative);
+
+        firstPath = concatPaths(firstPath, token);
         token = strtok(NULL, delimiter);
     }
     return 0;
@@ -890,12 +895,13 @@ void runMAKECommand(ParseQNode *cmdNode, char *path)
 
 char *runGOCommand(ParseQNode *cmdNode, char *pathQueue)
 {
-    int pathsSame = isPathsSameOrigin(cmdNode->path, pathQueue);
+    char *wantedPath = concatStrings(pathQueue, cmdNode->path);
+    int pathsSame = isPathsSameOrigin(cmdNode->path, pathQueue) && isPathExist(wantedPath);
     if(pathsSame == 1){
-        printf("WARNING: Passing GO command due to: You are trying to pass over the root directory.\n");
+        printf("WARNING: Passing GO, Probably you try to get over from root that is not allowed!\n");
         return pathQueue;
     }
-    char *wantedPath = concatStrings(pathQueue, cmdNode->path);
+
     int pathExistStatus = isPathExist(wantedPath);
     if(pathExistStatus == 1)
     {
@@ -917,8 +923,8 @@ char *concatPaths(char* str1, char* str2)
 
 char *concatStrings(char* str1, char* str2)
 {
-    char *result = malloc(strlen(str1) + strlen(str2) + 1); // +1 for the null-terminator
-    // in real code you would check for errors in malloc here
+    char *result = calloc((strlen(str1) + strlen(str2) + 1 ), sizeof(char)); // +1 for the null-terminator
+
     if(result == NULL)
     {
         printf("\nERROR: Malloc error when attemp to concat paths!\n");
@@ -971,6 +977,7 @@ int main()
     char file_name[260];
     // Maksimum dosya isminin 260 karakter olduğu bilgisine dayanarak 260 karakter olarak tanımlandı.
     // https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN
+
     printf("Enter pathmaker filename (Without extension): ");
     scanf("%s", file_name);
     char *fp;
@@ -978,15 +985,12 @@ int main()
     printf("The contents of %s file are: \n--------------------\n%s ", file_name, fp);
     printf("\n\n\n--------------------\nLexer\n--------------------\n");
     Queue lexerQueue= Lexer(fp);
-    printf("\n\n\n--------------------\nParser\n--------------------\n");
-    ParseQ *parseQueue = malloc(sizeof(ParseQ));
-    parseQueue = Parser(&lexerQueue, 0, 0);
-    printf("\n\n\n--------------------\nProgramRunner\n--------------------\n");
+    printf("\n\n\n--------------------\nParser - Interpreter\n--------------------\n");
     char *cwd = getcwd(NULL, 0);
-    char *path =".";
-    ProgramRunner(parseQueue, 0, cwd);
+    char *parseQueue = malloc(sizeof(char* ));
+    parseQueue = Parser(&lexerQueue, 0, 0, cwd);
 
-    free(path);
+    printf("\n\nSuccess\n\n");
     free(fp);
     free(parseQueue);
     system("pause");

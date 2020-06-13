@@ -28,6 +28,5 @@ if <minnos/boncuk>
 {
     make <buralar/hep>;
     go <buralar/hep2>;
-    make<calisiyor/evet>;
-		go<*/*/*/*/*/*/*/*/*/*/*/*/*>;
+    make<calisiyor/_evet>;
 }
