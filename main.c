@@ -33,6 +33,7 @@ typedef struct ParseNode
     struct ParseQ* block;
 } ParseQNode;
 
+// ParseQueue
 typedef struct ParseQ
 {
     ParseQNode * root;
@@ -93,7 +94,7 @@ void parseQdequeue(ParseQ *pt, ParseQNode **returnValue)
     }
 
 }
-
+// ParseQueue END
 // Queue
 typedef struct Node
 {
@@ -187,7 +188,7 @@ int getQueueSize(Queue *q)
 {
     return q->sizeOfQueue;
 }
-
+// Queue END
 // Declare
 char *concatPaths(char* str1, char*str2);
 char *concatStrings(char* str1, char* str2);
@@ -288,7 +289,6 @@ char *trim (char *s)
 int isValidPath(char *path)
 {
     if(path == NULL) return 0;
-
     const char *delimiter = "/";
     int pathLength = strlen(path);
     char cpyPath[pathLength + 1];
@@ -303,7 +303,7 @@ int isValidPath(char *path)
       int left = 0;
       while(left < strlen(token))
       {
-          if(isalnum(token[left]) || token[left] == '_' || token[left] == ' ' ){
+          if(isalnum(token[left]) || token[left] == '_' ){
             isBeforeAsterisk = 0;
           }
           else if(token[left] == '.')
@@ -345,6 +345,10 @@ char *parsePath(char *path)
         {
             newPath = concatPaths(newPath, "..");
         }else{
+             if(isalpha(token[0]) == 0){
+                printf("\nERROR: Directory names must start with letter.\n");
+                system("pause"); exit(0);
+                }
             newPath = concatPaths(newPath, token);
         }
 
@@ -385,15 +389,22 @@ Queue Lexer(char* str)
         {
             if(str[right] == '>')
             {
-
+                if(left + 1 == right){
+                    printf("\nERROR: |%s| is not a valid path!\n", subStr);
+                    system("pause"); exit(0);
+                }
                 Token newToken;
                 newToken.type = PATH;
                 subStr = subString(str, left + 1, right -1);
+                if(subStr[strlen(subStr) - 1] == '/') {
+                    printf("\nERROR: %s is not a valid path!\n", subStr);
+                    system("pause"); exit(0);
+                }
                 printf("PATH: %s\n", subStr);
                 char* parsedPath = parsePath(subStr);
                 if(isValidPath(parsedPath) == 0 || subStr == NULL || subStr[0] == '/')
                 {
-                    printf("\nERROR: %s is not a valid path!", subStr);
+                    printf("\nERROR: %s is not a valid path!\n", subStr);
                     system("pause"); exit(0);
                 }
                 newToken.value = parsedPath;
@@ -443,9 +454,7 @@ Queue Lexer(char* str)
                 Token newToken;
                 newToken.type = EOL;
                 newToken.value = NULL;
-
                 enqueue(&q, &newToken);
-
             }
 
             if(isValidSymbol(str[left]))
@@ -456,9 +465,7 @@ Queue Lexer(char* str)
                     left=right;
                     continue;
                 }
-
             }
-
             right++;
             left = right;
         }
@@ -469,8 +476,6 @@ Queue Lexer(char* str)
             {
                 printf("KEYWORD: %s\n", subStr);
                 Token newToken;
-                //newToken->type = EOL;
-
                 if(strcmp(subStr, "if") == 0)
                 {
                     printf("IF\n");
@@ -495,10 +500,7 @@ Queue Lexer(char* str)
                     newToken.type = MAKE;
                     newToken.value = NULL;
                 }
-
-
                 enqueue(&q, &newToken);
-
             }
             else
             {
@@ -713,7 +715,6 @@ char* ProgramRunner(ParseQ *PQ, int level, char *currentPath)
             {
                 printf("\nRUNNING GO\n");
                 char *newPath = runGOCommand(pqn, currentPath);
-                printf("%s\n", newPath);
                 currentPath = newPath;
                 getCurrentDir(currentPath);
             }else if(pqn->command == MAKE)
@@ -781,7 +782,6 @@ int isPathsSame(char *path, char *current)
             free(cwd);
             free(currentDir);
             free(lookingFor);
-            //printf("compare: %s, %s, %d\n", currentDir, lookingFor, strcmp(currentDir, lookingFor));
             return strcmp(currentDir, lookingFor);
         }
     }
@@ -791,7 +791,6 @@ int isPathsSame(char *path, char *current)
     free(lookingFor);
     return strcmp(path, current);
 }
-
 
 void copyString(char *target, char *source)
 {
@@ -850,13 +849,10 @@ int runIFCommand(ParseQNode *cmdNode, char *currentPath)
     char *wantedPath = concatPaths(currentPath, cmdNode->path);
     int pathStatus = isPathExist(wantedPath);
     int pathsSame = isPathsSameOrigin(cmdNode->path, currentPath);
-    if((cmdNode->command == CONDITION && pathStatus == 1 && pathsSame != 1) || (cmdNode->command == CONDITION_INVERSE && pathStatus == 0 && pathsSame == 1))
+    if((cmdNode->command == CONDITION && pathStatus == 1 && pathsSame != 1) || (cmdNode->command == CONDITION_INVERSE && (pathStatus == 0 || pathsSame == 1)))
     {
         return 1;
     }else{
-        if((cmdNode->command == CONDITION && pathsSame == 1) ||  (cmdNode->command == CONDITION_INVERSE && pathsSame != 1)){
-            printf("Passing condition due to: You are trying to check over the root directory.");
-        }
         return 0;
     }
 }
@@ -933,7 +929,6 @@ char *concatStrings(char* str1, char* str2)
     return result;
 }
 
-
 void readFile(char *filename, char *mode, char **buf)
 {
     FILE *fp;
@@ -971,7 +966,6 @@ void readFile(char *filename, char *mode, char **buf)
     return;
 }
 
-
 int main()
 {
     char file_name[260];
@@ -981,9 +975,7 @@ int main()
     scanf("%s", file_name);
     char *fp;
     readFile(concatStrings(file_name, ".pmk"), "r", &fp);
-
     printf("The contents of %s file are: \n--------------------\n%s ", file_name, fp);
-
     printf("\n\n\n--------------------\nLexer\n--------------------\n");
     Queue lexerQueue= Lexer(fp);
     printf("\n\n\n--------------------\nParser\n--------------------\n");
@@ -998,8 +990,5 @@ int main()
     free(fp);
     free(parseQueue);
     system("pause");
-
-//    isPathsSameOrigin("../..", "./../hello");
-
     return 0;
 }
